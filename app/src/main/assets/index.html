@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3864">
+<title>Lista obecności</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f6fa;--card:#fff;--tx:#1b2330;--mut:#667085;--pri:#1f3864;--ok:#1e8e3e;--okbg:#e2f4e6;--bd:#d6dbe5;--bar:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161d;--card:#1b212b;--tx:#e8ecf2;--mut:#98a2b3;--pri:#8fb0ee;--ok:#5fd07f;--okbg:#17321f;--bd:#2d3644;--bar:#1b212b}}
+:root[data-theme="dark"]{--bg:#12161d;--card:#1b212b;--tx:#e8ecf2;--mut:#98a2b3;--pri:#8fb0ee;--ok:#5fd07f;--okbg:#17321f;--bd:#2d3644;--bar:#1b212b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:Arial,Helvetica,sans-serif;font-size:17px}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bar);border-bottom:1px solid var(--bd);padding:10px 14px}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.date{font-size:14px;color:var(--mut)}
+.big{font-size:26px;font-weight:700;color:var(--pri)}
+.big small{font-size:13px;color:var(--mut);font-weight:400;margin-right:6px}
+#chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{font-size:13px;background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:2px 8px}
+main{padding:10px 10px 130px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;margin-bottom:12px;overflow:hidden}
+h2{margin:0;padding:10px 14px;font-size:15px;text-transform:uppercase;letter-spacing:.3px;background:var(--bg);color:var(--pri);display:flex;justify-content:space-between}
+h2 small{font-size:15px}
+.row{display:flex;align-items:center;gap:14px;min-height:52px;padding:6px 14px;border-top:1px solid var(--bd);cursor:pointer}
+.row.on{background:var(--okbg)}
+.row input[type=checkbox]{width:28px;height:28px;accent-color:var(--ok);flex:none}
+.row.on span{font-weight:700}
+.nm{flex:1;min-width:0;font:inherit;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+.x{flex:none;width:44px;height:44px;border:0;border-radius:8px;background:transparent;color:#c0392b;font-size:20px}
+.add{display:block;width:100%;padding:14px;border:0;border-top:1px solid var(--bd);background:transparent;color:var(--pri);font:inherit;font-weight:700}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--bar);border-top:1px solid var(--bd);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;z-index:6}
+.bar button{font:inherit;font-weight:700;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);padding:14px 10px;flex:1}
+.bar #reg{flex:2;background:var(--pri);color:var(--bg);border-color:var(--pri)}
+#toast{position:fixed;left:12px;right:12px;bottom:90px;background:#222;color:#fff;padding:12px 14px;border-radius:10px;font-size:15px;z-index:9;display:none;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><div class="big"><small>Obecni</small><span id="tot">0 / 0</span></div><div class="date" id="date"></div></div>
+  <div id="chips"></div>
+</header>
+<main id="list"></main>
+<div class="bar" id="bar"></div>
+<div id="toast"></div>
+<script src="exceljs.min.js"></script>
+<script>
+const D=[["Pracownicy administracyjni","Administracja",9],["Pracownicy magazynu","Magazyn",3],["Operatorzy CNC","CNC",9],["Pracownicy produkcji","Produkcja",25],["Pracownicy zewnętrzni","Zewnętrzny",5]];
+const DAYS=["Poniedziałek","Wtorek","Środa","Czwartek","Piątek","Sobota","Niedziela"],AB=["Pn","Wt","Śr","Cz","Pt","So","Nd"];
+const KEY="lista-obecnosci-v1";
+const $=s=>document.querySelector(s),p2=n=>String(n).padStart(2,"0");
+let S,edit=false,clr=false;
+const dkey=d=>d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
+function def(){let id=0;return{lists:D.map(([f,s,n])=>Array.from({length:n},(_,i)=>({id:"p"+(++id),n:s+" "+(i+1)}))),chk:{},day:"",nid:id}}
+function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
+  if(!S||!S.lists)S=def();
+  const k=dkey(new Date());if(S.day!==k){S.day=k;S.chk={}}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function h(t,a={},...k){const e=document.createElement(t);for(const x in a){if(x==="class")e.className=a[x];else if(x.startsWith("on"))e[x]=a[x];else if(x==="value")e.value=a[x];else e.setAttribute(x,a[x])}k.flat().forEach(c=>e.append(c));return e}
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display="none",3500)}
+function render(){
+  const d=new Date(),wd=(d.getDay()+6)%7;
+  $("#date").textContent=DAYS[wd]+" "+p2(d.getDate())+"."+p2(d.getMonth()+1)+"."+d.getFullYear();
+  const root=$("#list");root.textContent="";let tot=0,all=0;const chips=[];
+  D.forEach(([full,short],di)=>{
+    const L=S.lists[di],c=L.filter(x=>S.chk[x.id]).length;tot+=c;all+=L.length;
+    chips.push(h("span",{class:"chip"},short+" "+c+"/"+L.length));
+    const sec=h("section",{class:"card"},h("h2",{},h("span",{},full),h("small",{},c+"/"+L.length)));
+    L.forEach(x=>{
+      if(edit){
+        sec.append(h("div",{class:"row"},
+          h("input",{class:"nm",type:"text",value:x.n,placeholder:"Imię i nazwisko",oninput:e=>{x.n=e.target.value;save()}}),
+          h("button",{class:"x","aria-label":"Usuń",onclick:()=>{L.splice(L.indexOf(x),1);delete S.chk[x.id];save();render()}},"✕")));
+      }else{
+        const cb=h("input",{type:"checkbox",onchange:e=>{if(e.target.checked)S.chk[x.id]=1;else delete S.chk[x.id];save();render()}});
+        cb.checked=!!S.chk[x.id];
+        sec.append(h("label",{class:"row"+(cb.checked?" on":"")},cb,h("span",{},x.n||"(bez nazwy)")));
+      }
+    });
+    if(edit)sec.append(h("button",{class:"add",onclick:()=>{L.push({id:"p"+(++S.nid),n:""});save();render();
+      const i=document.querySelectorAll(".card")[di].querySelectorAll(".nm");i[i.length-1].focus()}},"+ Dodaj osobę"));
+    root.append(sec);
+  });
+  $("#tot").textContent=tot+" / "+all;$("#chips").replaceChildren(...chips);
+  const bar=$("#bar");bar.textContent="";
+  if(edit)bar.append(h("button",{id:"reg",onclick:()=>{edit=false;render()}},"Gotowe"));
+  else bar.append(
+    h("button",{onclick:()=>{edit=true;render()}},"Edytuj listę"),
+    h("button",{onclick:()=>{if(!clr){clr=true;toast("Dotknij ponownie, aby odznaczyć wszystkich");setTimeout(()=>{clr=false},3000);return}clr=false;S.chk={};save();render()}},"Odznacz"),
+    h("button",{id:"reg",onclick:exportXlsx},"Rejestruj"));
+}
+async function exportXlsx(){
+  if(!window.Android){toast("Zapis działa tylko w aplikacji na Androidzie");return}
+  if(!window.ExcelJS){toast("Brak modułu arkusza");return}
+  const d=new Date(),wd=(d.getDay()+6)%7,dd=p2(d.getDate())+"."+p2(d.getMonth()+1)+"."+d.getFullYear();
+  const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet(p2(d.getDate())+"."+p2(d.getMonth()+1)+" "+AB[wd]);
+  const fill=c=>({type:"pattern",pattern:"solid",fgColor:{argb:"FF"+c}});
+  const th={style:"thin",color:{argb:"FF999999"}},bd={left:th,right:th,top:th,bottom:th};
+  const put=(ref,v,o={})=>{const c=ws.getCell(ref);c.value=v;c.font={name:"Arial",size:o.sz||12,bold:!!o.b,color:{argb:"FF"+(o.col||"000000")}};
+    if(o.fill)c.fill=fill(o.fill);if(o.bd)c.border=bd;if(o.ctr)c.alignment={horizontal:"center",vertical:"middle"};return c};
+  ["A","B","C"].forEach(c=>put(c+"1",c==="A"?DAYS[wd]+" "+dd:null,{sz:14,b:1,col:"FFFFFF",fill:"1F3864"}));
+  ws.getRow(1).height=28;
+  put("A2","PODSUMOWANIE",{b:1,fill:"D9E1F2",bd:1});put("B2","Obecni",{b:1,fill:"D9E1F2",bd:1,ctr:1});put("C2","Razem",{b:1,fill:"D9E1F2",bd:1,ctr:1});
+  let row=12,T=0,N=0;const rows=[];
+  D.forEach(([full],di)=>{const L=S.lists[di];rows.push({hdr:row,f:row+1,l:row+L.length});row+=L.length+1});
+  D.forEach(([full],di)=>{
+    const L=S.lists[di],r=rows[di],c=L.filter(x=>S.chk[x.id]).length,s=3+di;T+=c;N+=L.length;
+    put("A"+s,full,{bd:1});
+    put("B"+s,L.length?{formula:`COUNTIF(B${r.f}:B${r.l},"✔")`,result:c}:0,{b:1,bd:1,ctr:1});
+    put("C"+s,L.length?{formula:`ROWS(B${r.f}:B${r.l})`,result:L.length}:0,{bd:1,ctr:1});
+  });
+  put("A8","RAZEM OBECNYCH",{sz:13,b:1,fill:"E2EFDA",bd:1});
+  put("B8",{formula:"SUM(B3:B7)",result:T},{sz:13,b:1,fill:"E2EFDA",bd:1,ctr:1});
+  put("C8",{formula:"SUM(C3:C7)",result:N},{sz:13,b:1,fill:"E2EFDA",bd:1,ctr:1});
+  put("A9","Nieobecni");put("B9",{formula:"C8-B8",result:N-T},{ctr:1});
+  put("A11","LISTA OBECNOŚCI",{b:1,fill:"D9E1F2",bd:1});put("B11","Obecny",{b:1,fill:"D9E1F2",bd:1,ctr:1});
+  D.forEach(([full],di)=>{
+    const L=S.lists[di],r=rows[di];
+    put("A"+r.hdr,full.toUpperCase(),{sz:11,b:1,fill:"D9E1F2"});put("B"+r.hdr,null,{fill:"D9E1F2"});put("C"+r.hdr,null,{fill:"D9E1F2"});
+    L.forEach((x,i)=>{const n=r.f+i;put("A"+n,x.n||"—",{bd:1});put("B"+n,S.chk[x.id]?"✔":null,{sz:14,b:1,col:"006100",bd:1,ctr:1});ws.getRow(n).height=24});
+  });
+  ws.columns=[{width:30},{width:11},{width:10}];
+  ws.pageSetup={fitToPage:true,fitToWidth:1,fitToHeight:0};
+  try{
+    const buf=await wb.xlsx.writeBuffer();
+    const name="lista obecności-"+dd+".xlsx";
+    const b64=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(",")[1]);fr.onerror=no;fr.readAsDataURL(new Blob([buf]))});
+    const res=String(Android.saveXlsx(name,b64));
+    toast(res.indexOf("OK:")===0?"Zapisano w Pobranych: "+name:"Błąd zapisu: "+res);
+  }catch(e){toast("Nie udało się zapisać raportu")}
+}
+load();save();render();
+</script>
+</body>
+</html>
